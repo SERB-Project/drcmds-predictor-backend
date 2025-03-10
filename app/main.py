@@ -18,10 +18,5 @@ app.add_middleware(
 )
 
 @app.get("/")
-def read_root():
-    return {"message": "Backend is running!"}
-
-@app.on_event("startup")
-async def startup_event():
-    print("\n🚀 Server started successfully!")
-    print(f"🔗 Swagger Docs: http://localhost:{settings.PORT}/docs\n")
+def home():
+    return {"health_check": "OK"}
