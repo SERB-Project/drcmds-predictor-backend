@@ -1,9 +1,7 @@
 from fastapi import APIRouter
+from app.api.endpoints import sarsVariantPrediction
+
 
 router = APIRouter()
 
-# Import endpoints and include them in the main router
-from app.api.endpoints import predict
-
-# example of how to import and include endpoints in the main router
-# router.include_router(predict.router, prefix="/predict", tags=["Model Prediction"])
+router.include_router(sarsVariantPrediction.router, prefix="/sars-variants", tags=["SARS-CoV2 Variants Classification and Mutation Analysis"])
