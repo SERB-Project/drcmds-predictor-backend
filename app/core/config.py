@@ -7,7 +7,7 @@ import os
 load_dotenv()
 
 class Settings(BaseSettings):
-    API_NAME: str = os.getenv("API_NAME", "DRCMD_Predictor")
+    API_NAME: str = os.getenv("API_NAME", "DrCMD_Predictor")
     API_VERSION: str = os.getenv("API_VERSION", "1.0")
     PORT: int = int(os.getenv("PORT", 8000))
 
