@@ -1,8 +1,10 @@
 import torch
 import numpy as np
-import os
 from zennit.composites import EpsilonGammaBox
 from zennit.attribution import Gradient
+from Bio.Data import CodonTable
+from Bio.Seq import Seq
+
 from app.models.sarsVariantsClassification_MutationAnalysis.cnn_model import InterSSPPCNN
 from app.services.sarsVariantsClassificationMutation.predict import classify_variant as predict
 
@@ -31,76 +33,81 @@ reference_sequence = np.load(reference_path)
 # Explainability composite
 composite = EpsilonGammaBox(epsilon=1e-4, gamma=0.5, low=-1.0, high=1.0)
 
+# Codon table
+standard_table = CodonTable.unambiguous_dna_by_name["Standard"]
+
 def explain_codon_mutations(sequence, top_n=15):
     """
-    Explain codon-wise mutations for a given sequence.
-    Returns top N codon mutations with reference and mutated codons.
+    Explain codon-wise mutations and classify them as silent, missense, or nonsense.
     """
-    # Convert sequence to tensor
     sequence_tensor = torch.tensor(sequence, dtype=torch.float32).unsqueeze(0).permute(0, 2, 1).to(device)
 
-    # Get prediction
-    predicted_label = predict(sequence)  
+    predicted_label = predict(sequence)
     predicted_label = variant_to_idx[predicted_label]
-    
-    # Compute attribution
+
     with Gradient(model=model, composite=composite) as attributor:
         outputs, relevance = attributor(
-            sequence_tensor.permute(0, 2, 1), 
+            sequence_tensor.permute(0, 2, 1),
             torch.eye(5).to(device)[predicted_label].unsqueeze(0)
         )
 
     summed_relevance = relevance[0].sum(axis=0).cpu().detach().numpy()
-
-    # Get top N relevant positions
     top_positions = np.argsort(-summed_relevance)[:top_n]
 
     mutations = []
-    checked_codons = set()  # Track codons to avoid duplicates
+    checked_codons = set()
 
     for pos in top_positions:
-        codon_start = pos - (pos % 3)  # Align to the first base of the codon
-
+        codon_start = pos - (pos % 3)
         if codon_start in checked_codons:
-            continue  # Skip if we've already checked this codon
+            continue
         checked_codons.add(codon_start)
 
-        # Extract codons
         ref_codon = extract_codon(reference_sequence, codon_start)
         mutated_codon = extract_codon(sequence, codon_start)
 
-        # Only record mutations
         if ref_codon != mutated_codon:
+            mutation_type = classify_codon_mutation(ref_codon, mutated_codon)
             mutations.append({
-                "Codon_Position": int(codon_start),  # Ensure Python int
-                "Reference_Codon": str(ref_codon),   # Ensure string
-                "Mutated_Codon": str(mutated_codon)  # Ensure string
+                "Codon_Position": int(codon_start),
+                "Reference_Codon": str(ref_codon),
+                "Mutated_Codon": str(mutated_codon),
+                "Mutation_Type": mutation_type
             })
 
-    
     return mutations
 
 def extract_codon(sequence, start_pos):
-    """
-    Extracts a codon (3 nucleotides) from a one-hot encoded sequence.
-    
-    Args:
-        sequence (np.array): One-hot encoded sequence.
-        start_pos (int): Start position of the codon.
-    
-    Returns:
-        str: Extracted codon sequence (3 nucleotides).
-    """
+    """Extract codon from one-hot sequence."""
     bases = ['A', 'T', 'C', 'G']
     codon = ""
 
     for i in range(3):
         pos = start_pos + i
-        if pos < sequence.shape[1]:  # Ensure within bounds
-            nucleotide_encoding = sequence[:, pos]
-            nucleotide = bases[np.argmax(nucleotide_encoding)] if np.sum(nucleotide_encoding) > 0 else 'N'
-            codon += nucleotide
+        if pos < sequence.shape[1]:
+            encoding = sequence[:, pos]
+            base = bases[np.argmax(encoding)] if np.sum(encoding) > 0 else 'N'
+            codon += base
         else:
-            codon += 'N'  # Pad with 'N' if out of bounds
-
+            codon += 'N'
     return codon
+
+def classify_codon_mutation(ref_codon, mutated_codon):
+    """
+    Classify mutation as Silent, Missense, or Nonsense based on amino acid change.
+    """
+    try:
+        if 'N' in ref_codon or 'N' in mutated_codon:
+            return "Unknown"
+
+        ref_aa = str(Seq(ref_codon).translate(table=standard_table))
+        mut_aa = str(Seq(mutated_codon).translate(table=standard_table))
+
+        if ref_aa == mut_aa:
+            return "Silent"
+        elif mut_aa == "*":
+            return "Nonsense"
+        else:
+            return "Missense"
+    except Exception as e:
+        return "Unknown"

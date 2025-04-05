@@ -5,7 +5,6 @@ from app.services.sarsVariantsClassificationMutation.parseFastaFiles import pars
 from app.services.sarsVariantsClassificationMutation.nucleotideWiseMutations import explain_nucleotide_mutations
 from app.services.sarsVariantsClassificationMutation.codonWiseMutations import explain_codon_mutations
 from app.schemas.sarsPredictionReq import SequenceInput
-import logging
 
 router = APIRouter()
 
