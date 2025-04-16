@@ -53,7 +53,7 @@ def classify_variant(encoded_sequence: np.array) -> str:
 
     # Perform inference
     with torch.no_grad():
-        output = model(sequence_tensor,mask)  # Mask is handled inside model
+        output = model(sequence_tensor)  # Mask is handled inside model
         predicted_idx = torch.argmax(output, dim=1).item()  # Get predicted class index
 
     # Return human-readable variant name
