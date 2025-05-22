@@ -27,17 +27,14 @@ def extract_features_acceptor(sequence: str) -> np.ndarray:
     return encoded
 
 def extract_features_donor(sequence: str) -> np.ndarray:
-    if len(sequence) != 15:
-        raise ValueError("Sequence must be exactly 15 bases long.")
-
-    mapping = {'A': [1, 0, 0, 0, 0],
-               'T': [0, 1, 0, 0, 0],
-               'G': [0, 0, 1, 0, 0],
-               'C': [0, 0, 0, 1, 0],
-               'N': [0, 0, 0, 0, 1]}
-    
-    encoded = []
-    for nucleotide in sequence.upper():
-        encoded.append(mapping.get(nucleotide, [0, 0, 0, 0, 1]))  # fallback to 'N'
-    
-    return np.array(encoded)
+    mapping = {
+        'A': [1, 0, 0, 0, 0],
+        'C': [0, 1, 0, 0, 0],
+        'G': [0, 0, 1, 0, 0],
+        'T': [0, 0, 0, 1, 0],
+        'N': [0, 0, 0, 0, 1]
+    }
+    seq = sequence.upper()
+    seq = seq[:15].ljust(15, 'N')  # Trim or pad to length 15 for donor model
+    encoded = np.array([mapping.get(nt, mapping['N']) for nt in seq])
+    return encoded

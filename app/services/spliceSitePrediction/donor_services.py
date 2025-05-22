@@ -10,7 +10,7 @@ model = load_model(MODEL_PATH)
 # Predict a single sequence
 def predict_donor_sequence(sequence: str) -> str:
     features = extract_features_donor(sequence)
-    input_data = np.array(features).reshape(1, 15, 5)  # Match donor model input shape
+    input_data = features.reshape(1, 15, 5)  # Match donor model input shape
     prediction = model.predict(input_data)
     predicted_class = np.argmax(prediction, axis=1)[0]
     return str(predicted_class)
