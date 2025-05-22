@@ -23,7 +23,7 @@ async def predict_drug_target_affinity(input_data: DrugTargetInput):
         graph_path = f"app/static/temp/{graph_filename}"
         
         # Get prediction
-        prediction, graph_path = predict_affinity(
+        prediction, graph_encoding = predict_affinity(
             input_data.compound_smiles, 
             input_data.target_sequence,
             generate_graph=True
@@ -31,7 +31,7 @@ async def predict_drug_target_affinity(input_data: DrugTargetInput):
         
         return {
             "affinity": prediction,
-            "explanation_graph": graph_path
+            "explanation_graph": graph_encoding
         }
     
     except ValueError as ve:

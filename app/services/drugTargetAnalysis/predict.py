@@ -5,6 +5,8 @@ import networkx as nx
 import matplotlib.pyplot as plt
 from torch_geometric.data import Data
 import sys
+import base64
+import io
 # Add all necessary paths to find modules
 current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(current_dir)
@@ -26,7 +28,7 @@ def load_model():
     return model, device
 
 # Process a single SMILES string and target sequence
-def process_input(compound_smiles, target_sequence=None):
+def process_input(compound_smiles, target_sequence):
     # Process compound
     c_size, features, edge_index = smile_to_graph(compound_smiles)
     
@@ -135,14 +137,22 @@ def generate_graph_visualization(data, prediction, output_path=None):
             node_color='skyblue', font_color='black', width=2)
     
     plt.title(f"Predicted Affinity: {prediction:.3f}")
-    plt.savefig(output_path, dpi=300)
+    # plt.savefig(output_path, dpi=300)
+    # plt.close()
+    
+    # # Return just the filename, not the full path
+    # return filename    
+    # Save to in-memory buffer
+    buf = io.BytesIO()
+    plt.savefig(buf, format='png', dpi=300)
     plt.close()
     
-    # Return just the filename, not the full path
-    return filename
+    buf.seek(0)
+    img_base64 = base64.b64encode(buf.read()).decode('utf-8')
+    return img_base64
 
 
-def predict_affinity(compound_smiles, target_sequence=None, generate_graph=False):
+def predict_affinity(compound_smiles, target_sequence, generate_graph=False):
     model, device = load_model()
     
     try:
@@ -152,11 +162,11 @@ def predict_affinity(compound_smiles, target_sequence=None, generate_graph=False
         with torch.no_grad():
             prediction = model(data.x, data.edge_index, data).item()
         
-        graph_path = None
+        graph_encoding = None
         if generate_graph:
-            graph_path = generate_graph_visualization(data, prediction)
+            graph_encoding = generate_graph_visualization(data, prediction)
         
-        return prediction, graph_path
+        return prediction, graph_encoding
     
     except Exception as e:
         raise Exception(f"Error during prediction: {str(e)}")

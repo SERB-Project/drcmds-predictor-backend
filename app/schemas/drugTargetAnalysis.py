@@ -3,7 +3,7 @@ from typing import Optional, List
 
 class DrugTargetInput(BaseModel):
     compound_smiles: str
-    target_sequence: Optional[str] = None
+    target_sequence: str
 
 class PredictionResult(BaseModel):
     affinity: float

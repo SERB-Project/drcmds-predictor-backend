@@ -22,3 +22,4 @@ env/
 *.log
 logs/
 cache/
+app/models/viralDiseasePrediction/cnn_model_all.h5
