@@ -4,6 +4,7 @@ import numpy as np
 import networkx as nx
 import matplotlib.pyplot as plt
 from torch_geometric.data import Data
+from torch_geometric.explain import Explainer, GNNExplainer, ModelConfig
 import sys
 import base64
 import io
@@ -103,58 +104,66 @@ def set_labels(x):
     label_dict = {i: value for i, value in enumerate(labels)}
     return label_dict
 
-def generate_graph_visualization(data, prediction, output_path=None):
+def generate_graph_visualization(data, prediction):
     """Generate and save a visualization of the molecule graph"""
     
-    # Create a unique filename if none provided
-    import uuid
-    import os
-    
-    # Define the correct path to app/static/temp
-    static_temp_dir = os.path.join("app", "static", "temp")
-    
-    # Make sure the directory exists
-    os.makedirs(static_temp_dir, exist_ok=True)
-    
-    # Generate unique filename
-    filename = f"graph_{uuid.uuid4()}.png"
-    output_path = os.path.join(static_temp_dir, filename)
-    
-    # Create a graph from edge index
     edges = []
     for i in range(len(data.edge_index[0])):
         edges.append([data.edge_index[0][i].item(), data.edge_index[1][i].item()])
-    
     g = nx.Graph(edges)
-    
-    # Get atom labels
-    labels = set_labels(data.x)
-    
-    # Draw the graph
-    pos = nx.spring_layout(g)
-    plt.figure(figsize=(8, 6))
-    nx.draw(g, pos, labels=labels, with_labels=True, node_size=150, 
-            node_color='skyblue', font_color='black', width=2)
-    
-    plt.title(f"Predicted Affinity: {prediction:.3f}")
-    # plt.savefig(output_path, dpi=300)
-    # plt.close()
-    
-    # # Return just the filename, not the full path
-    # return filename    
-    # Save to in-memory buffer
-    buf = io.BytesIO()
-    plt.savefig(buf, format='png', dpi=300)
-    plt.close()
-    
-    buf.seek(0)
-    img_base64 = base64.b64encode(buf.read()).decode('utf-8')
-    return img_base64
 
+    node_mask = prediction.node_mask.squeeze().tolist()
+    node_mask_values = {i: value for i, value in enumerate(node_mask)}
+    nx.set_node_attributes(g, node_mask_values, 'value')
+
+    edge_values = prediction.edge_mask.numpy()
+    for i, (u, v) in enumerate(g.edges()):
+        g[u][v]['weight'] = edge_values[i]
+
+    labels = set_labels(data.x)
+    node_values = np.array([data['value'] for _, data in g.nodes(data=True)])
+
+    node_norm = plt.Normalize(vmin=0, vmax=1)
+    edge_norm = plt.Normalize(vmin=0, vmax=1)
+
+    node_cmap = plt.cm.Blues
+    edge_cmap = plt.cm.Reds
+
+    node_colors = [node_cmap(node_norm(value)) for value in node_values]
+    edge_colors = [edge_cmap(edge_norm(weight)) for weight in edge_values]
+
+    pos = nx.spring_layout(g)
+
+    fig, ax = plt.subplots()
+    nx.draw(g, pos, labels=labels, with_labels=True, node_color=node_colors, edge_color=edge_colors,
+            node_size=150, font_color='black', ax=ax, width=3)
+
+    # Convert image to base64
+    img_buffer = io.BytesIO()
+    plt.savefig(img_buffer, format='png', dpi=300)
+    plt.close(fig)
+    img_buffer.seek(0)
+    base64_image = base64.b64encode(img_buffer.read()).decode('utf-8')
+
+    return base64_image
+
+model_config = ModelConfig(
+    mode='regression',
+    task_level='graph',
+    return_type='raw',
+)
 
 def predict_affinity(compound_smiles, target_sequence, generate_graph=False):
     model, device = load_model()
-    
+    explainer = Explainer(
+            model=model,
+            algorithm=GNNExplainer(epochs=200),
+            explanation_type='model',
+            node_mask_type='object',
+            edge_mask_type='object',
+            model_config=model_config,
+        )
+
     try:
         data = process_input(compound_smiles, target_sequence)
         data = data.to(device)
@@ -164,7 +173,18 @@ def predict_affinity(compound_smiles, target_sequence, generate_graph=False):
         
         graph_encoding = None
         if generate_graph:
-            graph_encoding = generate_graph_visualization(data, prediction)
+            try:
+                explanation = explainer(
+                    x=data.x,
+                    edge_index=data.edge_index,
+                    data = data
+                )
+
+                # generate base64 image using your visualization logic
+                graph_encoding = generate_graph_visualization(data, explanation)
+            except Exception as ex:
+                graph_encoding = None  # Optionally keep this null if explanation fails
+
         
         return prediction, graph_encoding
     
